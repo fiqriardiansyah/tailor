@@ -7,6 +7,7 @@ const BACKGROUND_KEY = 'tailor-background'
 
 type Mode = 'cover-letter' | 'cold-email'
 type Status = 'strong' | 'partial' | 'missing'
+type Importance = 'must_have' | 'nice_to_have'
 
 const STATUS_STYLES: Record<Status, string> = {
   strong: 'bg-green-100 text-green-700',
@@ -151,6 +152,32 @@ export default function TailorForm() {
 
         {/* Results */}
         <div className="space-y-3 flex-1">
+          {/* Fit Score */}
+          {result && <FitScoreCard score={result.fitScore} />}
+
+          {/* Requirements */}
+          <ResultCard title="Requirements → your evidence">
+            {result ? (
+              <ul className="divide-y divide-gray-100">
+                {result.requirements.map((req, i) => (
+                  <li key={i} className="px-5 py-3.5 flex gap-3 items-start">
+                    <span
+                      className={`mt-0.5 shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLES[req.status]}`}
+                    >
+                      {req.status}
+                    </span>
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="text-sm font-medium text-gray-800">{req.text}</p>
+                      <p className="text-sm text-gray-500">{req.evidence}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState />
+            )}
+          </ResultCard>
+
           {/* Draft */}
           <ResultCard
             title="Your draft"
@@ -188,29 +215,6 @@ export default function TailorForm() {
                   {draftText}
                 </pre>
               )
-            ) : (
-              <EmptyState />
-            )}
-          </ResultCard>
-
-          {/* Requirements */}
-          <ResultCard title="Requirements → your evidence">
-            {result ? (
-              <ul className="divide-y divide-gray-100">
-                {result.requirements.map((req, i) => (
-                  <li key={i} className="px-5 py-3.5 flex gap-3 items-start">
-                    <span
-                      className={`mt-0.5 shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLES[req.status]}`}
-                    >
-                      {req.status}
-                    </span>
-                    <div className="min-w-0 space-y-0.5">
-                      <p className="text-sm font-medium text-gray-800">{req.text}</p>
-                      <p className="text-sm text-gray-500">{req.evidence}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
             ) : (
               <EmptyState />
             )}
@@ -259,6 +263,28 @@ function EmptyState() {
   return (
     <div className="flex items-center justify-center px-5 py-10">
       <span className="text-sm text-gray-300 select-none">—</span>
+    </div>
+  )
+}
+
+function FitScoreCard({ score }: { score: number }) {
+  const band =
+    score >= 75
+      ? { label: 'Strong match', bar: 'bg-green-500', text: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' }
+      : score >= 50
+      ? { label: 'Partial match', bar: 'bg-amber-500', text: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' }
+      : { label: 'Weak match', bar: 'bg-red-500', text: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200' }
+
+  return (
+    <div className={`rounded-2xl border ${band.border} ${band.bg} px-5 py-4`}>
+      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Fit score</p>
+      <div className="flex items-baseline gap-3 mb-3">
+        <span className="text-4xl font-bold text-gray-900">{score}%</span>
+        <span className={`text-sm font-semibold ${band.text}`}>{band.label}</span>
+      </div>
+      <div className="h-2 bg-white/70 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${band.bar}`} style={{ width: `${score}%` }} />
+      </div>
     </div>
   )
 }

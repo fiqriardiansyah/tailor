@@ -1,9 +1,11 @@
 type Status = 'strong' | 'partial' | 'missing'
+type Importance = 'must_have' | 'nice_to_have'
 
 export interface TailorResponse {
-  requirements: { text: string; evidence: string; status: Status }[]
+  requirements: { text: string; evidence: string; status: Status, importance: Importance }[]
   draft: string
   gaps: string[]
+  fitScore: number
 }
 
 const SYSTEM_PROMPT = `You help a job applicant write a tailored, honest application. You are given a job
@@ -19,6 +21,10 @@ HARD RULES
 - If a posting requirement has no support in the background, do NOT paper over it —
   record it as a gap and never claim it in the draft.
 - Keep the draft tight: ~150–220 words. Plain, confident, specific.
+- When extracting each requirement, also classify its importance as "must_have"
+  or "nice_to_have", based on the posting's language: words like required,
+  must, essential, minimum → must_have; preferred, bonus, plus, nice to have → nice_to_have.
+- Do NOT output a fit score yourself. Only classify status and importance.
 
 STEPS
 1. Extract 5–8 key requirements/must-haves from the posting.
@@ -33,7 +39,7 @@ OUTPUT
 Return ONLY valid JSON. No markdown, no code fences, no commentary. Exact shape:
 {
   "requirements": [
-    { "text": "<requirement>", "evidence": "<evidence from background, or empty>", "status": "strong" | "partial" | "missing" }
+    { "text": "<requirement>", "evidence": "<evidence from background, or empty>", "status": "strong" | "partial" | "missing", "importance": "must_have" | "nice_to_have" }
   ],
   "draft": "<the letter or email>",
   "gaps": ["<unsupported requirement in plain language>"]
@@ -85,6 +91,17 @@ ${background}`
   const data = await res.json()
   const raw = data.choices?.[0]?.message?.content ?? ''
   const result: TailorResponse = JSON.parse(stripCodeFences(raw))
+
+  const statusValue: Record<Status, number> = { strong: 1, partial: 0.5, missing: 0 }
+  const importanceWeight: Record<Importance, number> = { must_have: 2, nice_to_have: 1 }
+  let weightedSum = 0
+  let totalWeight = 0
+  for (const req of result.requirements) {
+    const w = importanceWeight[req.importance] ?? 1
+    weightedSum += statusValue[req.status] * w
+    totalWeight += w
+  }
+  result.fitScore = totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) : 0
 
   return Response.json(result)
 }
