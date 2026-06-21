@@ -23,6 +23,8 @@ export default function TailorForm() {
   const [error, setError] = useState<string | null>(null)
   const [errors, setErrors] = useState<{ posting?: string; background?: string }>({})
   const [copied, setCopied] = useState(false)
+  const [draftText, setDraftText] = useState('')
+  const [editingDraft, setEditingDraft] = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem(BACKGROUND_KEY)
@@ -31,7 +33,7 @@ export default function TailorForm() {
 
   async function handleCopy() {
     if (!result) return
-    await navigator.clipboard.writeText(result.draft)
+    await navigator.clipboard.writeText(draftText)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -68,6 +70,8 @@ export default function TailorForm() {
         throw new Error('Unexpected response from the server. Please try again.')
       }
       setResult(data)
+      setDraftText(data.draft)
+      setEditingDraft(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.')
     } finally {
@@ -152,20 +156,38 @@ export default function TailorForm() {
             title="Your draft"
             action={
               result && (
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
-                >
-                  {copied ? 'Copied!' : 'Copy'}
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditingDraft((v) => !v)}
+                    className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                  >
+                    {editingDraft ? 'Done' : 'Edit'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+                  >
+                    {copied ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
               )
             }
           >
             {result ? (
-              <pre className="px-5 py-4 text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">
-                {result.draft}
-              </pre>
+              editingDraft ? (
+                <textarea
+                  value={draftText}
+                  onChange={(e) => setDraftText(e.target.value)}
+                  rows={20}
+                  className="w-full px-5 py-4 text-sm text-gray-800 font-sans leading-relaxed resize-y focus:outline-none"
+                />
+              ) : (
+                <pre className="px-5 py-4 text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">
+                  {draftText}
+                </pre>
+              )
             ) : (
               <EmptyState />
             )}
