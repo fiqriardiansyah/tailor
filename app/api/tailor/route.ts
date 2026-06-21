@@ -6,54 +6,85 @@ export interface TailorResponse {
   gaps: string[]
 }
 
+const SYSTEM_PROMPT = `You help a job applicant write a tailored, honest application. You are given a job
+posting and the applicant's background (résumé text, bullets, or notes). Produce a
+draft they could send with only light edits.
+
+HARD RULES
+- Use ONLY facts present in the applicant's background. Never invent or assume
+  employers, titles, dates, metrics, tools, or skills. If it isn't in the background,
+  they don't have it.
+- No flattery or filler ("I'm excited to apply", "I'm a perfect fit"). Lead with
+  specific, relevant evidence.
+- If a posting requirement has no support in the background, do NOT paper over it —
+  record it as a gap and never claim it in the draft.
+- Keep the draft tight: ~150–220 words. Plain, confident, specific.
+
+STEPS
+1. Extract 5–8 key requirements/must-haves from the posting.
+2. For each, find the strongest matching evidence in the background and rate it:
+   "strong" (direct evidence), "partial" (transferable/adjacent), or "missing" (none).
+3. Write the draft in the requested tone. tone="cover_letter" → a short cover letter;
+   tone="cold_email" → a brief direct outreach email that starts with a "Subject:" line.
+   Reference only "strong" and "partial" evidence.
+4. List every "missing" requirement plainly.
+
+OUTPUT
+Return ONLY valid JSON. No markdown, no code fences, no commentary. Exact shape:
+{
+  "requirements": [
+    { "text": "<requirement>", "evidence": "<evidence from background, or empty>", "status": "strong" | "partial" | "missing" }
+  ],
+  "draft": "<the letter or email>",
+  "gaps": ["<unsupported requirement in plain language>"]
+}`
+
+function stripCodeFences(text: string): string {
+  return text
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/, '')
+    .trim()
+}
+
 export async function POST(request: Request) {
-  await request.json()
+  const { posting, background, tone } = await request.json()
 
-  const result: TailorResponse = {
-    draft: `Dear Hiring Team,
+  const promptTone = tone === 'cold-email' ? 'cold_email' : 'cover_letter'
 
-I'm writing to express my strong interest in the Senior Software Engineer role. My four years of hands-on TypeScript work, combined with production experience building full-stack applications with Next.js and React, aligns closely with what you're looking for.
+  const userMessage = `tone="${promptTone}"
 
-At my current company I led a full migration of our monolith to a TypeScript-first microservices architecture, cutting runtime errors by 60%. I've also set up CI/CD pipelines using GitHub Actions and deployed services to AWS — both areas your posting highlights.
+JOB POSTING:
+${posting}
 
-I'd love to bring this background to your team. Thank you for your consideration.
+APPLICANT BACKGROUND:
+${background}`
 
-Best regards`,
-    requirements: [
-      {
-        text: '5+ years TypeScript experience',
-        evidence:
-          'Led TS migration at Acme Corp; 4 years full-time TypeScript across 3 production codebases.',
-        status: 'strong',
-      },
-      {
-        text: 'React and Next.js proficiency',
-        evidence:
-          'Built 3 production Next.js apps; open-source contributions to React component libraries.',
-        status: 'strong',
-      },
-      {
-        text: 'CI/CD pipeline experience',
-        evidence:
-          'Set up GitHub Actions workflows for 2 projects; no Jenkins or CircleCI experience.',
-        status: 'partial',
-      },
-      {
-        text: 'AWS or GCP cloud platforms',
-        evidence: 'Used AWS S3 and Lambda in side projects; no GCP; no deep infra ownership.',
-        status: 'partial',
-      },
-      {
-        text: 'Team leadership — managing direct reports',
-        evidence: 'No direct people-management experience mentioned in background.',
-        status: 'missing',
-      },
-    ],
-    gaps: [
-      'No mention of managing direct reports or engineering-lead responsibilities.',
-      'Cloud experience is limited to basic AWS services; no production GCP or deep infra work.',
-    ],
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.LLM_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'openai/gpt-4o-mini',
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userMessage },
+      ],
+    }),
+  })
+
+  if (!res.ok) {
+    return new Response(JSON.stringify({ error: `LLM API error ${res.status}` }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
+
+  const data = await res.json()
+  const raw = data.choices?.[0]?.message?.content ?? ''
+  const result: TailorResponse = JSON.parse(stripCodeFences(raw))
 
   return Response.json(result)
 }
