@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { TailorResponse } from '@/app/api/tailor/route'
+
+const BACKGROUND_KEY = 'tailor-background'
 
 type Mode = 'cover-letter' | 'cold-email'
 type Status = 'strong' | 'partial' | 'missing'
@@ -20,6 +22,19 @@ export default function TailorForm() {
   const [result, setResult] = useState<TailorResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [errors, setErrors] = useState<{ posting?: string; background?: string }>({})
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    const saved = localStorage.getItem(BACKGROUND_KEY)
+    if (saved) setBackground(saved)
+  }, [])
+
+  async function handleCopy() {
+    if (!result) return
+    await navigator.clipboard.writeText(result.draft)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   async function handleGenerate() {
     const newErrors: { posting?: string; background?: string } = {}
@@ -87,7 +102,7 @@ export default function TailorForm() {
             <textarea
               rows={6}
               value={background}
-              onChange={(e) => { setBackground(e.target.value); setErrors((p) => ({ ...p, background: undefined })) }}
+              onChange={(e) => { setBackground(e.target.value); localStorage.setItem(BACKGROUND_KEY, e.target.value); setErrors((p) => ({ ...p, background: undefined })) }}
               placeholder="Paste your résumé or a few bullet points about your experience…"
               className={`w-full rounded-lg border px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y ${errors.background ? 'border-red-400' : 'border-gray-300'}`}
             />
@@ -133,7 +148,20 @@ export default function TailorForm() {
         {/* Results */}
         <div className="space-y-3 flex-1">
           {/* Draft */}
-          <ResultCard title="Your draft">
+          <ResultCard
+            title="Your draft"
+            action={
+              result && (
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              )
+            }
+          >
             {result ? (
               <pre className="px-5 py-4 text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">
                 {result.draft}
@@ -193,11 +221,12 @@ export default function TailorForm() {
   )
 }
 
-function ResultCard({ title, children }: { title: string; children: React.ReactNode }) {
+function ResultCard({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100">
+      <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
         <h2 className="text-sm font-medium text-gray-700">{title}</h2>
+        {action}
       </div>
       {children}
     </div>
