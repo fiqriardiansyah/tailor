@@ -19,20 +19,42 @@ export default function TailorForm() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<TailorResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [errors, setErrors] = useState<{ posting?: string; background?: string }>({})
 
   async function handleGenerate() {
+    const newErrors: { posting?: string; background?: string } = {}
+    if (!posting.trim()) newErrors.posting = 'Job posting is required'
+    if (!background.trim()) newErrors.background = 'Background is required'
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+    setErrors({})
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/tailor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ posting, background, tone: mode }),
-      })
-      if (!res.ok) throw new Error(`Server error ${res.status}`)
-      setResult(await res.json())
+      let res: Response
+      try {
+        res = await fetch('/api/tailor', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ posting, background, tone: mode }),
+        })
+      } catch {
+        throw new Error('Network error — check your connection and try again.')
+      }
+      if (!res.ok) {
+        throw new Error(`The server returned an error (${res.status}). Please try again.`)
+      }
+      let data: TailorResponse
+      try {
+        data = await res.json()
+      } catch {
+        throw new Error('Unexpected response from the server. Please try again.')
+      }
+      setResult(data)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong')
+      setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -40,20 +62,21 @@ export default function TailorForm() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <h1 className="text-xl font-semibold tracking-tight text-gray-900">tailor</h1>
+      <h1 className="text-xl font-semibold tracking-tight mb-5 text-gray-900">Tailor CV</h1>
+      <div className=" flex mx-auto space-y-6 gap-5">
 
         {/* Input form */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-5">
+        <div className="bg-white flex-1 h-fit sticky top-5 rounded-2xl border border-gray-200 shadow-sm p-6 space-y-5">
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-gray-800">Job posting</label>
             <textarea
               rows={6}
               value={posting}
-              onChange={(e) => setPosting(e.target.value)}
+              onChange={(e) => { setPosting(e.target.value); setErrors((p) => ({ ...p, posting: undefined })) }}
               placeholder="Paste the job description here…"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y"
+              className={`w-full rounded-lg border px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y ${errors.posting ? 'border-red-400' : 'border-gray-300'}`}
             />
+            {errors.posting && <p className="text-xs text-red-500">{errors.posting}</p>}
           </div>
 
           <div className="space-y-1.5">
@@ -64,10 +87,11 @@ export default function TailorForm() {
             <textarea
               rows={6}
               value={background}
-              onChange={(e) => setBackground(e.target.value)}
+              onChange={(e) => { setBackground(e.target.value); setErrors((p) => ({ ...p, background: undefined })) }}
               placeholder="Paste your résumé or a few bullet points about your experience…"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y"
+              className={`w-full rounded-lg border px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y ${errors.background ? 'border-red-400' : 'border-gray-300'}`}
             />
+            {errors.background && <p className="text-xs text-red-500">{errors.background}</p>}
           </div>
 
           {/* Mode toggle */}
@@ -94,14 +118,20 @@ export default function TailorForm() {
             type="button"
             onClick={handleGenerate}
             disabled={loading}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-indigo-400 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
           >
+            {loading && (
+              <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            )}
             {loading ? 'Generating…' : 'Generate'}
           </button>
         </div>
 
         {/* Results */}
-        <div className="space-y-3">
+        <div className="space-y-3 flex-1">
           {/* Draft */}
           <ResultCard title="Your draft">
             {result ? (
