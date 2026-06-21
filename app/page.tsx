@@ -35,6 +35,7 @@ export default function Home() {
 
   function handleStartOver() {
     setResult(null)
+    setPosting('')
     setDraftText('')
     setEditingDraft(false)
     setError(null)
